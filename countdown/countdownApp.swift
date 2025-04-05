@@ -17,7 +17,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var timer: Timer?
     var targetDate: Date?
     var menu: NSMenu?
+    let settingsView = SettingsView()
     var settingsWindow: NSWindow?
+    var updateInterval = 86400 // Initializes to update each day
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -69,7 +71,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow?.center()
             settingsWindow?.title = "Settings"
             settingsWindow?.isReleasedWhenClosed = false
-            settingsWindow?.contentView = NSHostingView(rootView: SettingsView())
+            settingsWindow?.contentView = NSHostingView(rootView: settingsView)
         }
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -83,10 +85,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func updateCountdown() {
         guard let targetDate = targetDate else { return }
         let timeLeft = targetDate.timeIntervalSinceNow
-        if timeLeft > 0 {
-            let hoursLeft = Int(timeLeft / 3600)
-            let minutesLeft = Int((timeLeft.truncatingRemainder(dividingBy: 3600)) / 60)
-            statusItem?.button?.title = "⏳ \(hoursLeft)h \(minutesLeft)m"
+        if timeLeft > 0 { // If timer is still going
+            if settingsView.getSelectedUnit() == .days {
+            
+            // Units are in hours
+            } else if settingsView.isMinutesChecked() {
+                updateInterval = 60
+                let minutesLeft = Int((timeLeft.truncatingRemainder(dividingBy: 3600)) / 60)
+                let hoursLeft = Int(timeLeft / 3600)
+                statusItem?.button?.title = "\(hoursLeft)h \(minutesLeft)m"
+                
+            } else {
+                updateInterval = 3600
+                let hoursLeft = Int(timeLeft / 3600)
+                statusItem?.button?.title = "\(hoursLeft)h"
+            }
         } else {
             statusItem?.button?.title = "Time's up!"
             timer?.invalidate()
@@ -136,11 +149,18 @@ struct SettingsView: View {
             .padding()
             .frame(width: 500)
         }
-    }	
+    }
+    
+    func getSelectedUnit() -> TimeUnit {
+        return selectedUnit
+    }
+    
+    func isMinutesChecked() -> Bool {
+        return minutesCheck
+    }
 }
 
 enum TimeUnit: String, CaseIterable, Identifiable {
     case days, hours
     var id: String { self.rawValue }
 }
-	
