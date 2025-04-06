@@ -7,18 +7,23 @@ struct CountdownApp: App {
 
     var body: some Scene {
         Settings {
-            EmptyView() // No main window
+            EmptyView()
         }
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var statusItem: NSStatusItem?
     var timer: Timer?
     var targetDate: Date?
     var menu: NSMenu?
-    let settingsView = SettingsView()
+    
+    @State private var minutesCheck = false
+    @State private var selectedUnit: TimeUnit = .days
+    
+    let settings = SettingsData()
     var settingsWindow: NSWindow?
+    
     var updateInterval = 86400 // Initializes to update each day
     
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -61,18 +66,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc func openSettings() {
-        if settingsWindow == nil {
-            settingsWindow = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
-                styleMask: [.titled, .closable],
-                backing: .buffered,
-                defer: false
-            )
-            settingsWindow?.center()
-            settingsWindow?.title = "Settings"
-            settingsWindow?.isReleasedWhenClosed = false
-            settingsWindow?.contentView = NSHostingView(rootView: settingsView)
-        }
+        settingsWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        settingsWindow?.center()
+        settingsWindow?.title = "Settings"
+        settingsWindow?.isReleasedWhenClosed = false
+        settingsWindow?.contentView = NSHostingView(rootView: SettingsView(settings: settings))
+        
+        settingsWindow?.delegate = self
+        
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -86,16 +92,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let targetDate = targetDate else { return }
         let timeLeft = targetDate.timeIntervalSinceNow
         if timeLeft > 0 { // If timer is still going
-            if settingsView.getSelectedUnit() == .days {
-            
+            if settings.selectedUnit == .days { //
+                print("test0")
+                let daysLeft = Int(timeLeft / 86400)
+                statusItem?.button?.title = "\(daysLeft)d"
+                
             // Units are in hours
-            } else if settingsView.isMinutesChecked() {
+            } else if settings.minutesCheck {
+                print("test1")
                 updateInterval = 60
                 let minutesLeft = Int((timeLeft.truncatingRemainder(dividingBy: 3600)) / 60)
                 let hoursLeft = Int(timeLeft / 3600)
                 statusItem?.button?.title = "\(hoursLeft)h \(minutesLeft)m"
                 
             } else {
+                print("test2")
                 updateInterval = 3600
                 let hoursLeft = Int(timeLeft / 3600)
                 statusItem?.button?.title = "\(hoursLeft)h"
@@ -104,6 +115,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             statusItem?.button?.title = "Time's up!"
             timer?.invalidate()
         }
+    }
+    
+    @objc func windowWillClose(_ notification: Notification) {
+        print(settings.selectedUnit)
+        updateCountdown()
+        settingsWindow = nil
     }
     
     @objc func quitApp() {
@@ -121,44 +138,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 struct SettingsView: View {
-    @State private var minutesCheck = false
-    @State private var selectedUnit: TimeUnit = .hours
-    
+    @ObservedObject var settings: SettingsData
+
     var body: some View {
         VStack(spacing: 12) {
-            Text("Settings")
-                .font(.headline)
-                .padding()
 
-            Picker("Display in: ", selection: $selectedUnit) {
+            Picker("Display in: ", selection: $settings.selectedUnit) {
                 Text("Days").tag(TimeUnit.days)
                 Text("Hours").tag(TimeUnit.hours)
             }
             .pickerStyle(.segmented)
             .padding(.vertical)
             .frame(width: 250)
-            
-            Toggle(isOn: $minutesCheck) {
+
+            Toggle(isOn: $settings.minutesCheck) {
                 Text("Show Minutes")
             }
             .toggleStyle(.checkbox)
+            .disabled(settings.selectedUnit == .days)
 
-            Button("Close") {
-                NSApp.keyWindow?.close()
+            Button("Save") {
+                NSApp.windows.first(where: { $0.title == "Settings" })?.close()
             }
-            .padding()
+            .padding(.all)
             .frame(width: 500)
         }
     }
-    
-    func getSelectedUnit() -> TimeUnit {
-        return selectedUnit
-    }
-    
-    func isMinutesChecked() -> Bool {
-        return minutesCheck
-    }
 }
+
+class SettingsData: ObservableObject {
+    @Published var minutesCheck: Bool = false
+    @Published var selectedUnit: TimeUnit = .days
+}
+
 
 enum TimeUnit: String, CaseIterable, Identifiable {
     case days, hours
