@@ -93,20 +93,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let timeLeft = targetDate.timeIntervalSinceNow
         if timeLeft > 0 { // If timer is still going
             if settings.selectedUnit == .days { //
-                print("test0")
                 let daysLeft = Int(timeLeft / 86400)
                 statusItem?.button?.title = "\(daysLeft)d"
                 
             // Units are in hours
             } else if settings.minutesCheck {
-                print("test1")
                 updateInterval = 60
                 let minutesLeft = Int((timeLeft.truncatingRemainder(dividingBy: 3600)) / 60)
                 let hoursLeft = Int(timeLeft / 3600)
                 statusItem?.button?.title = "\(hoursLeft)h \(minutesLeft)m"
                 
             } else {
-                print("test2")
                 updateInterval = 3600
                 let hoursLeft = Int(timeLeft / 3600)
                 statusItem?.button?.title = "\(hoursLeft)h"
@@ -118,7 +115,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     
     @objc func windowWillClose(_ notification: Notification) {
-        print(settings.selectedUnit)
         updateCountdown()
         settingsWindow = nil
     }
