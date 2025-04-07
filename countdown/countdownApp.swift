@@ -201,7 +201,7 @@ struct DateSelectionView: View {
             DatePicker("Alert Date:", selection: Binding(
                 get: { settings.targetDate ?? Date() },
                 set: { settings.targetDate = $0 }
-            ))
+            ), in: Date()...)
             
             Button("Submit") {NSApp.windows.first(where: { $0.title == "Select Date" })?.close()}
             .padding(.top)
