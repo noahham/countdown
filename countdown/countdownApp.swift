@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 
 @main
 struct CountdownApp: App {
@@ -15,21 +14,19 @@ struct CountdownApp: App {
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var statusItem: NSStatusItem?
     var timer: Timer?
-    var targetDate: Date?
     var menu: NSMenu?
-    
-    @State private var minutesCheck = false
-    @State private var selectedUnit: TimeUnit = .days
     
     let settings = SettingsData()
     var settingsWindow: NSWindow?
+    var dateWindow: NSWindow?
     
-    var updateInterval = 86400 // Initializes to update each day
+    var updateInterval: Int?
     
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem?.button?.title = "Set Date"
         
+        // On-click popup
         menu = NSMenu()
         menu?.addItem(NSMenuItem(title: "Set Date", action: #selector(promptForDate), keyEquivalent: ""))
         menu?.addItem(NSMenuItem(title: "Settings", action: #selector(openSettings), keyEquivalent: ""))
@@ -42,27 +39,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     
     @objc func promptForDate() {
-        let inputView = NSTextField(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
-        let alert = NSAlert()
-        alert.messageText = "Enter target date and time"
-        alert.informativeText = "Format: YYYY-MM-DD HH:MM"
-        alert.alertStyle = .informational
-        alert.accessoryView = inputView
-        alert.addButton(withTitle: "OK")
-        alert.addButton(withTitle: "Cancel")
+        dateWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        dateWindow?.center()
+        dateWindow?.title = "Select Date"
+        dateWindow?.isReleasedWhenClosed = false
+        dateWindow?.contentView = NSHostingView(rootView: DateSelectionView(settings: settings))
         
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            let dateString = inputView.stringValue
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd HH:mm"
-            if let date = formatter.date(from: dateString) {
-                targetDate = date
-                updateCountdown()
-            } else {
-                showError("Invalid date format. Use YYYY-MM-DD HH:MM")
-            }
-        }
+        dateWindow?.delegate = self
+        
+        dateWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
     
     @objc func openSettings() {
@@ -84,13 +75,49 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     
     func startTimer() {
-        timer = Timer.scheduledTimer(timeInterval: 3600, target: self, selector: #selector(updateCountdown), userInfo: nil, repeats: true)
-        updateCountdown() // Ensure it updates immediately on launch
+        timer?.invalidate()
+
+        var interval: TimeInterval = 3600 // Default
+        var fireDate: Date = Date()
+
+        let calendar = Calendar.current
+        let now = Date()
+
+        if settings.selectedUnit == .days {
+            interval = 86400 // 1 day
+            fireDate = calendar.nextDate(after: now, matching: DateComponents(hour: 0, minute: 0, second: 0), matchingPolicy: .nextTime)!
+        } else if settings.minutesCheck {
+            interval = 60
+            fireDate = calendar.nextDate(after: now, matching: DateComponents(second: 0), matchingPolicy: .nextTime)!
+        } else {
+            interval = 3600
+            fireDate = calendar.nextDate(after: now, matching: DateComponents(minute: 0, second: 0), matchingPolicy: .nextTime)!
+        }
+
+        updateInterval = Int(interval)
+
+        // Schedule first update at next boundary
+        let delay = fireDate.timeIntervalSinceNow
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            self?.updateCountdown()
+            self?.timer = Timer.scheduledTimer(timeInterval: interval,
+                                               target: self as Any,
+                                               selector: #selector(self?.updateCountdown),
+                                               userInfo: nil,
+                                               repeats: true)
+        }
+
+        updateCountdown()
     }
+
+
     
     @objc func updateCountdown() {
-        guard let targetDate = targetDate else { return }
-        let timeLeft = targetDate.timeIntervalSinceNow
+        guard let target = settings.targetDate else {
+            statusItem?.button?.title = "Set Date"
+            return
+        }
+        let timeLeft = target.timeIntervalSinceNow
         if timeLeft > 0 { // If timer is still going
             if settings.selectedUnit == .days { //
                 let daysLeft = Int(timeLeft / 86400)
@@ -98,13 +125,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 
             // Units are in hours
             } else if settings.minutesCheck {
-                updateInterval = 60
                 let minutesLeft = Int((timeLeft.truncatingRemainder(dividingBy: 3600)) / 60)
                 let hoursLeft = Int(timeLeft / 3600)
                 statusItem?.button?.title = "\(hoursLeft)h \(minutesLeft)m"
                 
             } else {
-                updateInterval = 3600
                 let hoursLeft = Int(timeLeft / 3600)
                 statusItem?.button?.title = "\(hoursLeft)h"
             }
@@ -138,13 +163,12 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-
             Picker("Display in: ", selection: $settings.selectedUnit) {
                 Text("Days").tag(TimeUnit.days)
                 Text("Hours").tag(TimeUnit.hours)
             }
             .pickerStyle(.segmented)
-            .padding(.vertical)
+            .padding(.top)
             .frame(width: 250)
 
             Toggle(isOn: $settings.minutesCheck) {
@@ -152,23 +176,48 @@ struct SettingsView: View {
             }
             .toggleStyle(.checkbox)
             .disabled(settings.selectedUnit == .days)
+            .padding(.bottom)
 
             Button("Save") {
+                if let appDelegate = NSApp.delegate as? AppDelegate {
+                    appDelegate.startTimer() // Restart with new interval
+                }
                 NSApp.windows.first(where: { $0.title == "Settings" })?.close()
             }
-            .padding(.all)
-            .frame(width: 500)
+            
+            Text("Created by Noah Ham.")
+                .font(.caption)
+                .padding(.top)
         }
+        .frame(width: 300, height: 200)
+    }
+}
+
+struct DateSelectionView: View {
+    @ObservedObject var settings: SettingsData
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            DatePicker("Alert Date:", selection: Binding(
+                get: { settings.targetDate ?? Date() },
+                set: { settings.targetDate = $0 }
+            ))
+            
+            Button("Submit") {NSApp.windows.first(where: { $0.title == "Select Date" })?.close()}
+            .padding(.top)
+        }
+        .frame(width: 300, height: 200)
     }
 }
 
 class SettingsData: ObservableObject {
     @Published var minutesCheck: Bool = false
     @Published var selectedUnit: TimeUnit = .days
+    @Published var targetDate: Date? = nil
 }
 
 
 enum TimeUnit: String, CaseIterable, Identifiable {
     case days, hours
-    var id: String { self.rawValue }
+    var id: String {self.rawValue}
 }
