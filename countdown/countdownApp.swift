@@ -6,7 +6,7 @@ struct CountdownApp: App {
 
     var body: some Scene {
         Settings {
-            EmptyView()
+            EmptyView() // No primary window
         }
     }
 }
@@ -22,6 +22,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     var updateInterval: Int?
     
+    // Adds app to dock if a window is open
+    func applicationWillBecomeActive(_ notification: Notification) {
+            NSApp.setActivationPolicy(.regular)
+        }
+        
+    // Removes app from dock when a window isn't open
+    func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
+        NSApp.setActivationPolicy(.accessory)
+        return false
+    }
+    
+    // Initializes the menu bar instance
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem?.button?.title = "Set Date"
@@ -38,6 +50,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         startTimer()
     }
     
+    // Opens menu to change date
     @objc func promptForDate() {
         dateWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
@@ -56,6 +69,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
     
+    // Opens menu to change settings
     @objc func openSettings() {
         settingsWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
@@ -74,6 +88,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
     
+    // Starts timer and adjusts update timing to update as little as possible
     func startTimer() {
         timer?.invalidate()
 
@@ -84,12 +99,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let now = Date()
 
         if settings.selectedUnit == .days {
-            interval = 86400 // 1 day
+            // Updates once a day
+            interval = 86400
             fireDate = calendar.nextDate(after: now, matching: DateComponents(hour: 0, minute: 0, second: 0), matchingPolicy: .nextTime)!
         } else if settings.minutesCheck {
+            // Updates once a minute
             interval = 60
             fireDate = calendar.nextDate(after: now, matching: DateComponents(second: 0), matchingPolicy: .nextTime)!
         } else {
+            // Updates once an hour
             interval = 3600
             fireDate = calendar.nextDate(after: now, matching: DateComponents(minute: 0, second: 0), matchingPolicy: .nextTime)!
         }
@@ -110,8 +128,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         updateCountdown()
     }
 
-
-    
     @objc func updateCountdown() {
         guard let target = settings.targetDate else {
             statusItem?.button?.title = "Set Date"
@@ -158,6 +174,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 }
 
+// Window for changing settings
 struct SettingsView: View {
     @ObservedObject var settings: SettingsData
 
@@ -193,6 +210,7 @@ struct SettingsView: View {
     }
 }
 
+// Window for selecting date
 struct DateSelectionView: View {
     @ObservedObject var settings: SettingsData
     
@@ -201,7 +219,7 @@ struct DateSelectionView: View {
             DatePicker("Alert Date:", selection: Binding(
                 get: { settings.targetDate ?? Date() },
                 set: { settings.targetDate = $0 }
-            ), in: Date()...)
+            ), in: Date()...) // No date before the present allowed
             
             Button("Submit") {NSApp.windows.first(where: { $0.title == "Select Date" })?.close()}
             .padding(.top)
@@ -210,6 +228,7 @@ struct DateSelectionView: View {
     }
 }
 
+// Holds all data transferred between classes and structs
 class SettingsData: ObservableObject {
     @Published var minutesCheck: Bool = false
     @Published var selectedUnit: TimeUnit = .days
@@ -217,6 +236,7 @@ class SettingsData: ObservableObject {
 }
 
 
+// TimeUnit datatype
 enum TimeUnit: String, CaseIterable, Identifiable {
     case days, hours
     var id: String {self.rawValue}
