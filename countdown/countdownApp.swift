@@ -52,6 +52,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     // Opens menu to change date
     @objc func promptForDate() {
+        if let window = settingsWindow, window.isVisible {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        
         dateWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
             styleMask: [.titled, .closable],
@@ -67,10 +73,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         
         dateWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        NSApp.setActivationPolicy(.regular)
     }
     
     // Opens menu to change settings
     @objc func openSettings() {
+        if let window = settingsWindow, window.isVisible {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        
         settingsWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
             styleMask: [.titled, .closable],
@@ -86,6 +99,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        NSApp.setActivationPolicy(.regular)
     }
     
     // Starts timer and adjusts update timing to update as little as possible
@@ -121,10 +135,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         updateCountdown() // Run once immediately
-        print(interval)
     }
 
-
+    // Recalculates time to finish with correct units
     @objc func updateCountdown() {
         guard let target = settings.targetDate else {
             statusItem?.button?.title = "Set Date"
@@ -157,8 +170,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
     
+    // On settings window close
     @objc func windowWillClose(_ notification: Notification) {
+        if notification.object as? NSWindow == settingsWindow {
+            settingsWindow = nil
+        } else if notification.object as? NSWindow == dateWindow {
+            dateWindow = nil
+        }
+        
         updateCountdown()
+        AppDelegate.shared?.startTimer()
         settingsWindow = nil
     }
     
@@ -197,12 +218,7 @@ struct SettingsView: View {
             .disabled(settings.selectedUnit == .days)
             .padding(.bottom)
 
-            Button("Save") {
-                AppDelegate.shared?.startTimer()
-                NSApp.windows.first(where: { $0.title == "Settings" })?.close()
-                print("asd")
-                
-            }
+            Button("Save") {NSApp.windows.first(where: { $0.title == "Settings" })?.close()}
             
             Text("Created by Noah Ham.")
                 .font(.caption)
