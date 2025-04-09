@@ -12,6 +12,7 @@ struct CountdownApp: App {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+    static var shared: AppDelegate? = nil
     var statusItem: NSStatusItem?
     var timer: Timer?
     var menu: NSMenu?
@@ -20,12 +21,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var settingsWindow: NSWindow?
     var dateWindow: NSWindow?
     
-    var updateInterval: Int?
-    
     // Adds app to dock if a window is open
     func applicationWillBecomeActive(_ notification: Notification) {
             NSApp.setActivationPolicy(.regular)
-        }
+    }
         
     // Removes app from dock when a window isn't open
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
@@ -35,6 +34,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     
     // Initializes the menu bar instance
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppDelegate.shared = self
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem?.button?.title = "Set Date"
         
@@ -92,48 +92,47 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func startTimer() {
         timer?.invalidate()
 
-        var interval: TimeInterval = 3600 // Default
-        var fireDate: Date = Date()
-
-        let calendar = Calendar.current
         let now = Date()
+        let calendar = Calendar.current
+        var interval: TimeInterval = 3600
+        var fireDate: Date = now
 
         if settings.selectedUnit == .days {
-            // Updates once a day
             interval = 86400
             fireDate = calendar.nextDate(after: now, matching: DateComponents(hour: 0, minute: 0, second: 0), matchingPolicy: .nextTime)!
         } else if settings.minutesCheck {
-            // Updates once a minute
             interval = 60
             fireDate = calendar.nextDate(after: now, matching: DateComponents(second: 0), matchingPolicy: .nextTime)!
         } else {
-            // Updates once an hour
             interval = 3600
             fireDate = calendar.nextDate(after: now, matching: DateComponents(minute: 0, second: 0), matchingPolicy: .nextTime)!
         }
 
-        updateInterval = Int(interval)
-
-        // Schedule first update at next boundary
+        // Schedule the first update at the exact boundary
         let delay = fireDate.timeIntervalSinceNow
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            self?.updateCountdown()
-            self?.timer = Timer.scheduledTimer(timeInterval: interval,
-                                               target: self as Any,
-                                               selector: #selector(self?.updateCountdown),
-                                               userInfo: nil,
-                                               repeats: true)
+            guard let self = self else { return }
+            self.updateCountdown()
+            self.timer = Timer.scheduledTimer(timeInterval: interval,
+                                              target: self,
+                                              selector: #selector(self.updateCountdown),
+                                              userInfo: nil,
+                                              repeats: true)
         }
 
-        updateCountdown()
+        updateCountdown() // Run once immediately
+        print(interval)
     }
+
 
     @objc func updateCountdown() {
         guard let target = settings.targetDate else {
             statusItem?.button?.title = "Set Date"
             return
         }
+        
         let timeLeft = target.timeIntervalSinceNow
+        
         if timeLeft > 0 { // If timer is still going
             if settings.selectedUnit == .days { //
                 let daysLeft = Int(timeLeft / 86400)
@@ -141,14 +140,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 
             // Units are in hours
             } else if settings.minutesCheck {
-                let minutesLeft = Int((timeLeft.truncatingRemainder(dividingBy: 3600)) / 60)
+                
                 let hoursLeft = Int(timeLeft / 3600)
+                let minutesLeft = Int((timeLeft.truncatingRemainder(dividingBy: 3600)) / 60)
                 statusItem?.button?.title = "\(hoursLeft)h \(minutesLeft)m"
                 
             } else {
+                
                 let hoursLeft = Int(timeLeft / 3600)
                 statusItem?.button?.title = "\(hoursLeft)h"
             }
+            
         } else {
             statusItem?.button?.title = "Time's up!"
             timer?.invalidate()
@@ -196,10 +198,10 @@ struct SettingsView: View {
             .padding(.bottom)
 
             Button("Save") {
-                if let appDelegate = NSApp.delegate as? AppDelegate {
-                    appDelegate.startTimer() // Restart with new interval
-                }
+                AppDelegate.shared?.startTimer()
                 NSApp.windows.first(where: { $0.title == "Settings" })?.close()
+                print("asd")
+                
             }
             
             Text("Created by Noah Ham.")
