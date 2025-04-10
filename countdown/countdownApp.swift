@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import QuartzCore
 
 @main
 struct CountdownApp: App {
@@ -19,10 +20,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var menu: NSMenu?
     
     let settings = SettingsData()
-//    let confetti = ConfettiView()
+    
     var settingsWindow: NSWindow?
     var dateWindow: NSWindow?
-    
+
     // Adds app to dock if a window is open
     func applicationWillBecomeActive(_ notification: Notification) {
             NSApp.setActivationPolicy(.regular)
@@ -116,6 +117,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if settings.selectedUnit == .days {
             interval = 86400
             fireDate = calendar.nextDate(after: now, matching: DateComponents(hour: 0, minute: 0, second: 0), matchingPolicy: .nextTime)!
+        } else if settings.secondsCheck {
+            interval = 1
+            fireDate = calendar.nextDate(after: now, matching: DateComponents(), matchingPolicy: .nextTime)!
         } else if settings.minutesCheck {
             interval = 60
             fireDate = calendar.nextDate(after: now, matching: DateComponents(second: 0), matchingPolicy: .nextTime)!
@@ -155,10 +159,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 
             // Units are in hours
             } else if settings.minutesCheck {
-                
-                let hoursLeft = Int(timeLeft / 3600)
-                let minutesLeft = Int((timeLeft.truncatingRemainder(dividingBy: 3600)) / 60)
-                statusItem?.button?.title = "\(hoursLeft)h \(minutesLeft)m"
+                if settings.secondsCheck {
+                    let hoursLeft = Int(timeLeft / 3600)
+                    let minutesLeft = Int((timeLeft.truncatingRemainder(dividingBy: 3600)) / 60)
+                    let secondsLeft = Int(timeLeft)
+                    statusItem?.button?.title = "\(hoursLeft)h \(minutesLeft)m \(secondsLeft)s"
+                } else {
+                    let hoursLeft = Int(timeLeft / 3600)
+                    let minutesLeft = Int((timeLeft.truncatingRemainder(dividingBy: 3600)) / 60)
+                    statusItem?.button?.title = "\(hoursLeft)h \(minutesLeft)m"
+                }
                 
             } else {
                 
@@ -169,10 +179,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         } else {
             statusItem?.button?.title = "Time's up!"
             timer?.invalidate()
-//            confetti.startConfetti()
-//            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-//                self.confetti.stopConfetti()
-//            }
         }
     }
     
@@ -227,6 +233,15 @@ struct SettingsView: View {
             }
             .toggleStyle(.checkbox)
             .disabled(settings.selectedUnit == .days)
+            
+            Toggle(isOn: $settings.secondsCheck) {
+                Text("Show Seconds")
+            }
+            .onChange(of: settings.secondsCheck) {
+                settings.minutesCheck = true
+            }
+            .toggleStyle(.checkbox)
+            .disabled(settings.selectedUnit == .days)
             .padding(.bottom)
 
             Button("Save") {NSApp.windows.first(where: { $0.title == "Settings" })?.close()}
@@ -259,6 +274,7 @@ struct DateSelectionView: View {
 
 // Holds all data transferred between classes and structs
 class SettingsData: ObservableObject {
+    @Published var secondsCheck: Bool = false
     @Published var minutesCheck: Bool = false
     @Published var selectedUnit: TimeUnit = .days
     @Published var targetDate: Date? = nil
