@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 @main
 struct CountdownApp: App {
@@ -18,6 +19,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var menu: NSMenu?
     
     let settings = SettingsData()
+//    let confetti = ConfettiView()
     var settingsWindow: NSWindow?
     var dateWindow: NSWindow?
     
@@ -167,6 +169,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         } else {
             statusItem?.button?.title = "Time's up!"
             timer?.invalidate()
+//            confetti.startConfetti()
+//            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+//                self.confetti.stopConfetti()
+//            }
         }
     }
     
@@ -181,6 +187,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         updateCountdown()
         AppDelegate.shared?.startTimer()
         settingsWindow = nil
+    }
+    
+    // Updates timer on wake
+    @objc func didWake(notification: Notification) {
+        updateCountdown()
     }
     
     @objc func quitApp() {
